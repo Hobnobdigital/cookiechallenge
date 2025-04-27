@@ -1,1 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cookie Challenge</title>
+<style>
+/* —— layout —— */
+html,body{margin:0;height:100%;overflow:hidden;background:#111;color:#fff;font-family:sans-serif}
+#gameCanvas{background:#000;display:block;margin:0 auto;border:4px solid #fff;touch-action:none}
+#ui{font-size:20px;text-align:center;margin:4px 0}
+#titleScreen{position:fixed;inset:0;background:#000 url('data:image/png;base64,') center/cover no-repeat;
+display:flex;flex-direction:column;justify-content:center;align-items:center}
+#titleScreen h1{font-size:9vw;margin:0;text-shadow:0 0 10px #000}
+#titleScreen p{font-size:4.5vw;margin:10px 0;text-shadow:0 0 8px #000}
+#titleScreen button{padding:10px 20px;font-size:5vw;border:none;border-radius:6px;background:#d69c4e;color:#111}
+#muteBtn{position:fixed;top:10px;right:10px;z-index:10;font-size:18px;padding:5px 8px;border:none;border-radius:4px;background:#d69c4e;color:#111;cursor:pointer}
+/* —— on-screen arrows for phones —— */
+#controls{display:none;position:fixed;bottom:15px;left:50%;transform:translateX(-50%);z-index:9;width:200px;height:160px}
+.btn{position:absolute;width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,.25);border:2px solid #fff;display:flex;justify-content:center;align-items:center;user-select:none}
+.btn:active{background:#fff;color:#000}
+#up{left:70px;top:0}#down{left:70px;bottom:0}#left{left:0;top:50%;transform:translateY(-50%)}#right{right:0;top:50%;transform:translateY(-50%)}
+.btn span{font-size:24px;pointer-events:none}
+@media(pointer:coarse){#controls{display:block}}
+</style>
+</head>
+<body>
+<button id="muteBtn">🔊</button>
+<div id="titleScreen"><h1>Cookie Challenge</h1><p>Tap to start – grab cookies, dodge monsters</p><button id="startBtn">Start Game</button></div>
+<p id="ui" style="display:none;">Score: 0</p>
+<canvas id="gameCanvas"></canvas>
 
+<!-- touch arrows -->
+<div id="controls">
+  <div id="up"    class="btn"><span>▲</span></div>
+  <div id="down"  class="btn"><span>▼</span></div>
+  <div id="left"  class="btn"><span>◀</span></div>
+  <div id="right" class="btn"><span>▶</span></div>
+</div>
+
+<audio id="bgm" src="bgm.mp3" loop></audio>
+
+<script>
+const TILE=20,PS=4,MS=2,CR=6,MR=12,PR=10;
+const cvs=document.getElementById('gameCanvas'),ctx=cvs.getContext('2d');
+const ui=document.getElementById('ui'),bgm=document.getElementById('bgm');
+const mute=document.getElementById('muteBtn'),title=document.getElementById('titleScreen'),
+      start=document.getElementById('startBtn'),mobile=matchMedia('(pointer:coarse)').matches;
+function size(){const w=innerWidth,h=innerHeight-(mobile?180:60);cvs.width=w-20;cvs.height=h-20;}
+addEventListener('resize',size);size();
+/* mobile arrows */
+const dirs={up:0,down:0,left:0,right:0};
+['up','down','left','right'].forEach(id=>{
+ ['touchstart','mousedown'].forEach(e=>sel(id).addEventListener(e,a=>{a.preventDefault();dirs[id]=1}));
+ ['touchend','touchcancel','mouseup','mouseleave'].forEach(e=>sel(id).addEventListener(e,a=>{a.preventDefault();dirs[id]=0}));
+});
+function sel(id){return document.getElementById(id)}
+/* audio ctx */
+const AC=AudioContext||webkitAudioContext,ac=new AC();
+const tone=(f,d=150,t='sine',v=.4)=>{const o=ac.createOscillator(),g=ac.createGain();o.type=t;o.frequency.value=f;g.gain.value=v;o.connect(g).connect(ac.destination);o.start();o.stop(ac.currentTime+d/1e3);};
+const eat=()=>tone(880,100,'sine',.3),hit=()=>tone(110,300,'square',.4),over=()=>[660,440,220].forEach((f,i)=>setTimeout(()=>tone(f,150,'saw',.5),i*160));
+let p,c,mons,score,go,run;
+const R=()=>({x:Math.random()*(cvs.width-40)+20,y:Math.random()*(cvs.height-40)+20});
+const D=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+function reset(){p={x:cvs.width/2,y:cvs.height/2,dx:0,dy:0};c=[];mons=[];score=0;go=0;
+ for(let i=0;i<20;i++)c.push(R());for(let i=0;i<3;i++){let m=R(),a=Math.random()*Math.PI*2;m.dx=Math.cos(a)*MS;m.dy=Math.sin(a)*MS;mons.push(m);}ui.textContent='Score: 0';}
+function touch(){if(!mobile)return;p.dx=(dirs.left?-PS:0)+(dirs.right?PS:0);p.dy=(dirs.up?-PS:0)+(dirs.down?PS:0);}
+function update(){touch();p.x=Math.max(PR,Math.min(cvs.width-PR,p.x+p.dx));p.y=Math.max(PR,Math.min(cvs.height-PR,p.y+p.dy));
+ mons.forEach(m=>{m.x+=m.dx;m.y+=m.dy;if(m.x<MR||m.x>cvs.width-MR)m.dx*=-1;if(m.y<MR||m.y>cvs.height-MR)m.dy*=-1;});
+ c=c.filter(k=>{if(D(k,p)<PR+CR){score+=10;ui.textContent='Score: '+score;eat();return 0}return 1});
+ if(!c.length){for(let i=0;i<20;i++)c.push(R());let m=R(),a=Math.random()*Math.PI*2;m.dx=Math.cos(a)*MS;m.dy=Math.sin(a)*MS;mons.push(m);}
+ if(mons.some(m=>D(m,p)<PR+MR)){go=1;run=0;hit();over();bgm.pause();}}
+function draw(){ctx.fillStyle='#000';ctx.fillRect(0,0,cvs.width,cvs.height);
+ c.forEach(k=>{ctx.fillStyle='#d69c4e';ctx.beginPath();ctx.arc(k.x,k.y,CR,0,6.28);ctx.fill();
+ ctx.fillStyle='#925c27';ctx.beginPath();ctx.arc(k.x-2,k.y-1,2,0,6.28);ctx.fill();ctx.beginPath();ctx.arc(k.x+2,k.y+1,2,0,6.28);ctx.fill();});
+ ctx.fillStyle='#4ec5f1';ctx.beginPath();ctx.arc(p.x,p.y,PR,0,6.28);ctx.fill();
+ mons.forEach(m=>{ctx.fillStyle='#e63946';ctx.beginPath();ctx.arc(m.x,m.y,MR,0,6.28);ctx.fill();
+ ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(m.x-4,m.y-3,3,0,6.28);ctx.fill();ctx.beginPath();ctx.arc(m.x+4,m.y-3,3,0,6.28);ctx.fill();ctx.fillStyle='#000';
+ ctx.beginPath();ctx.arc(m.x-4,m.y-3,1.5,0,6.28);ctx.fill();ctx.beginPath();ctx.arc(m.x+4,m.y-3,1.5,0,6.28);ctx.fill();});
+ if(go){ctx.fillStyle='rgba(0,0,0,.7)';ctx.fillRect(0,0,cvs.width,cvs.height);
+ ctx.fillStyle='#fff';ctx.textAlign='center';ctx.font='8vw sans-serif';ctx.fillText('Game Over',cvs.width/2,cvs.height/2-20);
+ ctx.font='4vw sans-serif';ctx.fillText('Press R or tap Start',cvs.width/2,cvs.height/2+20);}}
+function loop(){if(!run)return;update();draw();requestAnimationFrame(loop);}
+start.onclick=()=>{title.style.display='none';cvs.style.display='block';ui.style.display='block';reset();run=1;bgm.volume=.6;bgm.play();ac.resume();loop();};
+addEventListener('keydown',e=>{if(!run&&e.key!=='r')start.click();if(go&&e.key==='r'){start.click();return;}
+ if(e.key==='ArrowUp'||e.key==='w')p.dy=-PS;if(e.key==='ArrowDown'||e.key==='s')p.dy=PS;if(e.key==='ArrowLeft'||e.key==='a')p.dx=-PS;if(e.key==='ArrowRight'||e.key==='d')p.dx=PS;});
+addEventListener('keyup',e=>{if(['ArrowUp','w','ArrowDown','s'].includes(e.key))p.dy=0;if(['ArrowLeft','a','ArrowRight','d'].includes(e.key))p.dx=0;});
+mute.onclick=()=>{bgm.muted=!bgm.muted;mute.textContent=bgm.muted?'🔇':'🔊';};
+</script>
+</body>
+</html>
