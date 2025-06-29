@@ -1,4 +1,4 @@
-<!-- ================= Cookie Challenge – fast version ================= -->
+<!-- ================= Cookie Challenge – fast version (glitch fix) ================= -->
 <!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Cookie Challenge</title>
@@ -8,10 +8,17 @@ html,body{margin:0;height:100%;background:#111;color:#fff;font-family:sans-serif
 #hud{display:flex;justify-content:space-between;align-items:center;margin:4px 8px;font-size:18px}
 #canvasWrap{flex:1;display:flex;justify-content:center;align-items:center}
 #gameCanvas{background:#000;border:4px solid #fff;touch-action:none;max-width:98vw;max-height:65vh}
-#titleScreen{position:fixed;inset:0;background:url('title.png') center/cover no-repeat;display:flex;flex-direction:column;justify-content:center;align-items:center}
+
+/* title */
+#titleScreen{position:fixed;inset:0;background:url('title.png') center/cover no-repeat;
+display:flex;flex-direction:column;justify-content:center;align-items:center}
 #titleScreen h1{font-size:9vw;margin:0;text-shadow:0 0 10px #000}
 #titleScreen button{padding:10px 26px;font-size:5vw;border:none;border-radius:8px;background:#d69c4e;color:#111;cursor:pointer}
+
+/* misc */
 #muteBtn{position:fixed;top:10px;right:10px;z-index:10;font-size:18px;padding:6px 10px;border:none;border-radius:4px;background:#d69c4e;color:#111}
+
+/* D-pad */
 #controls{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:9;width:210px;height:170px}
 .btn{position:absolute;width:70px;height:70px;border-radius:50%;background:rgba(255,255,255,.25);border:2px solid #fff;display:flex;justify-content:center;align-items:center;user-select:none;transition:.05s}
 .btn:active{background:#fff;color:#000;transform:scale(.94)}
@@ -20,15 +27,17 @@ html,body{margin:0;height:100%;background:#111;color:#fff;font-family:sans-serif
 @media(pointer:fine){#controls{display:none}}
 </style></head><body>
 <div id="outer">
- <div id="hud" style="display:none"><span id="score">Score: 0</span><span id="level">Level 1</span></div>
- <div id="canvasWrap"><canvas id="gameCanvas"></canvas></div>
+  <div id="hud" style="display:none"><span id="score">Score: 0</span><span id="level">Level 1</span></div>
+  <div id="canvasWrap"><canvas id="gameCanvas"></canvas></div>
 </div>
 
 <div id="titleScreen"><h1>Cookie Challenge</h1><button id="startBtn">Start Game</button></div>
 
 <div id="controls">
- <div id="up" class="btn"><span>▲</span></div><div id="down" class="btn"><span>▼</span></div>
- <div id="left" class="btn"><span>◀</span></div><div id="right" class="btn"><span>▶</span></div>
+  <div id="up"    class="btn"><span>▲</span></div>
+  <div id="down"  class="btn"><span>▼</span></div>
+  <div id="left"  class="btn"><span>◀</span></div>
+  <div id="right" class="btn"><span>▶</span></div>
 </div>
 
 <button id="muteBtn">🔊</button>
@@ -41,11 +50,11 @@ const PLAYER_SPEED=5, MONSTER_R=22, BULLET_R=5,
       SHOOT_TIME=10e3, BOOST_TIME=10e3;
 
 /* ==== DOM ==== */
-const cvs=$('#gameCanvas'),ctx=cvs.getContext('2d'),hud=$('#hud'),
-      scoreEl=$('#score'),lvlEl=$('#level'),title=$('#titleScreen'),
-      start=$('#startBtn'),mute=$('#muteBtn'),bgm=$('#bgm'),
-      mobile=matchMedia('(pointer:coarse)').matches;
-function $(s){return document.querySelector(s);}
+const $ = s => document.querySelector(s);
+const cvs=$('#gameCanvas'),ctx=cvs.getContext('2d'),
+      hud=$('#hud'),scoreEl=$('#score'),lvlEl=$('#level'),
+      title=$('#titleScreen'),start=$('#startBtn'),mute=$('#muteBtn'),
+      bgm=$('#bgm'),mobile=matchMedia('(pointer:coarse)').matches;
 
 /* ==== resize ==== */
 function fit(){const w=innerWidth-24,h=(innerHeight-(mobile?220:60))-24;cvs.width=w;cvs.height=h;}
@@ -54,10 +63,10 @@ addEventListener('resize',fit);fit();
 /* ==== D-pad ==== */
 const dirs={up:0,down:0,left:0,right:0};
 ['up','down','left','right'].forEach(id=>{
- ['touchstart','mousedown'].forEach(ev=>el(id).addEventListener(ev,e=>{e.preventDefault();dirs[id]=1}));
- ['touchend','touchcancel','mouseup','mouseleave'].forEach(ev=>el(id).addEventListener(ev,e=>{e.preventDefault();dirs[id]=0}));
+ ['touchstart','mousedown'].forEach(ev=>idEl(id).addEventListener(ev,e=>{e.preventDefault();dirs[id]=1}));
+ ['touchend','touchcancel','mouseup','mouseleave'].forEach(ev=>idEl(id).addEventListener(ev,e=>{e.preventDefault();dirs[id]=0}));
 });
-function el(id){return document.getElementById(id)}
+function idEl(id){return document.getElementById(id)}
 
 /* ==== audio helpers ==== */
 const AC=AudioContext||webkitAudioContext,ac=new AC();
@@ -69,8 +78,8 @@ const hitSfx =()=>osc(110,340,'square',.5);
 const fireSfx=()=>osc(1568,60,'square',.45);
 
 /* ==== helpers ==== */
-const R=()=>({x:20+Math.random()*(cvs.width-40),y:20+Math.random()*(cvs.height-40)});
-const D=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+const rand=()=>({x:20+Math.random()*(cvs.width-40),y:20+Math.random()*(cvs.height-40)});
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 
 /* ==== game vars ==== */
 let p,cookies,mons,playerBullets,monsterBullets,score,level,oreo,boost,
@@ -84,44 +93,31 @@ function reset(){
  spawnCookies();spawnMonsters(5);
  scoreEl.textContent='Score: 0';lvlEl.textContent='Level 1';
 }
-
-function spawnCookies(){for(let i=0;i<25;i++)cookies.push(R());}
+function spawnCookies(){for(let i=0;i<25;i++)cookies.push(rand());}
 function spawnMonsters(n){
- for(let i=0;i<n;i++){let m=R(),a=Math.random()*6.28;
-  m.dx=Math.cos(a)*monSpeed;m.dy=Math.sin(a)*monSpeed;m.cool=1000+Math.random()*1000;
-  m.tCool=m.cool;mons.push(m);}
+ for(let i=0;i<n;i++){let m=rand(),a=Math.random()*6.28;
+  m.dx=Math.cos(a)*monSpeed;m.dy=Math.sin(a)*monSpeed;m.cool=1000+Math.random()*1000;m.tCool=m.cool;
+  mons.push(m);}
 }
 
-/* ==== main update ==== */
-function touchDir(){if(!mobile)return;
- p.dx=(dirs.left?-p.spd:0)+(dirs.right?p.spd:0);
- p.dy=(dirs.up?-p.spd:0)+(dirs.down?p.spd:0);
-}
-function firePlayer(){if(shootTimer<=0)return;fireSfx();
- playerBullets.push({x:p.x,y:p.y,dx:0,dy:-10});}
-
-function fireMonster(m){
- const ang=Math.atan2(p.y-m.y,p.x-m.x);monsterBullets.push({
-  x:m.x,y:m.y,dx:Math.cos(ang)*6,dy:Math.sin(ang)*6
- });
-}
+/* ==== gameplay ==== */
+function firePlayer(){if(shootTimer<=0)return;fireSfx();playerBullets.push({x:p.x,y:p.y,dx:0,dy:-10});}
+function fireMonster(m){const a=Math.atan2(p.y-m.y,p.x-m.x);monsterBullets.push({x:m.x,y:m.y,dx:Math.cos(a)*6,dy:Math.sin(a)*6});}
+function touchDir(){if(!mobile)return;p.dx=(dirs.left?-p.spd:0)+(dirs.right?p.spd:0);p.dy=(dirs.up?-p.spd:0)+(dirs.down?p.spd:0);}
 
 function update(dt){
  touchDir();
  p.x=Math.max(PLAYER_SPEED,Math.min(cvs.width-PLAYER_SPEED,p.x+p.dx));
  p.y=Math.max(PLAYER_SPEED,Math.min(cvs.height-PLAYER_SPEED,p.y+p.dy));
 
- /* timers */
  if(shootTimer>0){shootTimer-=dt;if(shootTimer<=0)p.color='#4ec5f1';}
  if(boostTimer>0){boostTimer-=dt;if(boostTimer<=0){p.spd=PLAYER_SPEED;p.color='#4ec5f1';}}
 
- /* bullets move */
  playerBullets.forEach(b=>{b.y+=b.dy});
  monsterBullets.forEach(b=>{b.x+=b.dx;b.y+=b.dy});
  playerBullets=playerBullets.filter(b=>b.y>-BULLET_R);
  monsterBullets=monsterBullets.filter(b=>b.x>-BULLET_R&&b.x<cvs.width+BULLET_R&&b.y>-BULLET_R&&b.y<cvs.height+BULLET_R);
 
- /* monsters move & shoot */
  mons.forEach(m=>{
   m.x+=m.dx;m.y+=m.dy;
   if(m.x<MONSTER_R||m.x>cvs.width-MONSTER_R)m.dx*=-1;
@@ -129,43 +125,36 @@ function update(dt){
   m.tCool-=dt;if(m.tCool<=0){fireMonster(m);m.tCool=m.cool;}
  });
 
- /* pickups */
  cookies=cookies.filter(c=>{
-  if(D(c,p)<PLAYER_SPEED+COOKIE_R){score+=10;scoreEl.textContent='Score: '+score;eatSfx();return 0}
+  if(dist(c,p)<PLAYER_SPEED+COOKIE_R){score+=10;scoreEl.textContent='Score: '+score;eatSfx();return 0}
   return 1;
  });
 
- if(!oreo && cookies.length<=20)oreo=R();
- if(!boost && cookies.length<=10)boost=R();
+ if(!oreo && cookies.length<=20)oreo=rand();
+ if(!boost&& cookies.length<=10)boost=rand();
 
- if(oreo&&D(oreo,p)<PLAYER_SPEED+OREO_R){oreo=null;shootTimer=SHOOT_TIME;p.color='#ffd700';powerSfx();}
- if(boost&&D(boost,p)<PLAYER_SPEED+BOOST_R){boost=null;boostTimer=BOOST_TIME;p.spd=PLAYER_SPEED*2.5;p.color='#00e0ff';powerSfx();}
+ if(oreo&&dist(oreo,p)<PLAYER_SPEED+OREO_R){oreo=null;shootTimer=SHOOT_TIME;p.color='#ffd700';powerSfx();}
+ if(boost&&dist(boost,p)<PLAYER_SPEED+BOOST_R){boost=null;boostTimer=BOOST_TIME;p.spd=PLAYER_SPEED*2.5;p.color='#00e0ff';powerSfx();}
 
- /* bullet collisions */
  mons=mons.filter(m=>{
-  const hit=playerBullets.some(b=>D(b,m)<MONSTER_R+BULLET_R);
+  const hit=playerBullets.some(b=>dist(b,m)<MONSTER_R+BULLET_R);
   if(hit){boomSfx();score+=50;scoreEl.textContent='Score: '+score;}
   return !hit;
  });
- playerBullets=playerBullets.filter(b=>!mons.some(m=>D(b,m)<MONSTER_R+BULLET_R));
+ playerBullets=playerBullets.filter(b=>!mons.some(m=>dist(b,m)<MONSTER_R+BULLET_R));
 
- /* monster bullet hits player */
- if(monsterBullets.some(b=>D(b,p)<PR+BULLET_R)){gameOver=1;run=0;hitSfx();bgm.pause();}
+ if(monsterBullets.some(b=>dist(b,p)<PLAYER_SPEED+BULLET_R)){gameOver=1;run=0;hitSfx();bgm.pause();}
 
- /* new level */
  if(!cookies.length && !gameOver){
-  level++;lvlEl.textContent='Level '+level;
-  monSpeed+=0.3;spawnCookies();spawnMonsters(3+level*2);
-  shootTimer=0;boostTimer=0;oreo=null;boost=null;powerSfx();
+  level++;lvlEl.textContent='Level '+level;monSpeed+=0.3;
+  spawnCookies();spawnMonsters(3+level*2);shootTimer=0;boostTimer=0;oreo=null;boost=null;powerSfx();
  }
 }
 
 let last=0;
-function loop(t){
- if(!run)return;const dt=t-last;last=t;update(dt);draw();requestAnimationFrame(loop);
-}
+function loop(t){if(!run)return;const dt=t-last;last=t;update(dt);draw();requestAnimationFrame(loop);}
 
-/* ==== draw ==== */
+/* ==== render ==== */
 function circ(x,y,r,c){ctx.fillStyle=c;ctx.beginPath();ctx.arc(x,y,r,0,6.28);ctx.fill();}
 function draw(){
  ctx.fillStyle='#000';ctx.fillRect(0,0,cvs.width,cvs.height);
@@ -180,8 +169,7 @@ function draw(){
  circ(p.x,p.y,PLAYER_SPEED,p.color);
 
  mons.forEach(m=>{
-  const color=level<2?'#e63946':level<3?'#8b5cf6':'#22c55e';
-  circ(m.x,m.y,MONSTER_R,color);
+  circ(m.x,m.y,MONSTER_R,level<2?'#e63946':level<3?'#8b5cf6':'#22c55e');
   circ(m.x-MONSTER_R/3,m.y-MONSTER_R/3,MONSTER_R/3,'#fff');
   circ(m.x+MONSTER_R/3,m.y-MONSTER_R/3,MONSTER_R/3,'#fff');
   circ(m.x-MONSTER_R/3,m.y-MONSTER_R/3,MONSTER_R/6,'#000');
@@ -197,11 +185,17 @@ function draw(){
 }
 
 /* ==== controls ==== */
-start.onclick=()=>{title.style.display='none';hud.style.display='flex';reset();run=1;bgm.volume=.65;bgm.play();ac.resume();last=performance.now();loop(last);};
+start.onclick=()=>{                     /* --- FIX: fit() BEFORE reset() --- */
+  title.style.display='none';
+  hud.style.display='flex';
+  fit();                                // <- ensures canvas uses final height
+  reset();
+  run=1;bgm.volume=.65;bgm.play();ac.resume();last=performance.now();loop(last);
+};
 addEventListener('keydown',e=>{
  if(!run&&e.key!=='r')start.click();
  if(gameOver&&e.key==='r'){start.click();return;}
- if(e.key===' '){firePlayer();}
+ if(e.key===' ')firePlayer();
  if(e.key==='ArrowUp'||e.key==='w')p.dy=-p.spd;
  if(e.key==='ArrowDown'||e.key==='s')p.dy=p.spd;
  if(e.key==='ArrowLeft'||e.key==='a')p.dx=-p.spd;
@@ -211,6 +205,8 @@ addEventListener('keyup',e=>{
  if(['ArrowUp','w','ArrowDown','s'].includes(e.key))p.dy=0;
  if(['ArrowLeft','a','Right','d','ArrowRight'].includes(e.key))p.dx=0;
 });
-cvs.addEventListener('mousedown',firePlayer);cvs.addEventListener('touchstart',e=>{if(mobile)firePlayer();});
+cvs.addEventListener('mousedown',firePlayer);
+cvs.addEventListener('touchstart',e=>{if(mobile)firePlayer();});
 mute.onclick=()=>{bgm.muted=!bgm.muted;mute.textContent=bgm.muted?'🔇':'🔊';};
-</script></body></html>
+</script>
+</body></html>
