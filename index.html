@@ -1,228 +1,216 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- ================= Cookie Challenge – fast version ================= -->
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Cookie Challenge</title>
-
 <style>
-/* -------- general layout -------- */
 html,body{margin:0;height:100%;background:#111;color:#fff;font-family:sans-serif;overflow:hidden}
 #outer{display:flex;flex-direction:column;height:100%}
 #hud{display:flex;justify-content:space-between;align-items:center;margin:4px 8px;font-size:18px}
 #canvasWrap{flex:1;display:flex;justify-content:center;align-items:center}
 #gameCanvas{background:#000;border:4px solid #fff;touch-action:none;max-width:98vw;max-height:65vh}
-
-/* -------- title screen -------- */
-#titleScreen{position:fixed;inset:0;background:url('title.png') center/cover no-repeat;
-display:flex;flex-direction:column;justify-content:center;align-items:center}
+#titleScreen{position:fixed;inset:0;background:url('title.png') center/cover no-repeat;display:flex;flex-direction:column;justify-content:center;align-items:center}
 #titleScreen h1{font-size:9vw;margin:0;text-shadow:0 0 10px #000}
-#titleScreen button{padding:10px 26px;font-size:5vw;border:none;border-radius:8px;background:#d69c4e;color:#111}
-
-/* -------- mute -------- */
+#titleScreen button{padding:10px 26px;font-size:5vw;border:none;border-radius:8px;background:#d69c4e;color:#111;cursor:pointer}
 #muteBtn{position:fixed;top:10px;right:10px;z-index:10;font-size:18px;padding:6px 10px;border:none;border-radius:4px;background:#d69c4e;color:#111}
-
-/* -------- on-screen D-pad -------- */
 #controls{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:9;width:210px;height:170px}
 .btn{position:absolute;width:70px;height:70px;border-radius:50%;background:rgba(255,255,255,.25);border:2px solid #fff;display:flex;justify-content:center;align-items:center;user-select:none;transition:.05s}
 .btn:active{background:#fff;color:#000;transform:scale(.94)}
-#up{top:0;left:70px}
-#down{bottom:0;left:70px}
-#left{left:0;top:50%;transform:translateY(-50%)}
-#right{right:0;top:50%;transform:translateY(-50%)}
+#up{top:0;left:70px}#down{bottom:0;left:70px}#left{left:0;top:50%;transform:translateY(-50%)}#right{right:0;top:50%;transform:translateY(-50%)}
 .btn span{font-size:32px;pointer-events:none}
 @media(pointer:fine){#controls{display:none}}
-</style>
-</head>
-<body>
+</style></head><body>
 <div id="outer">
-  <div id="hud" style="display:none">
-    <span id="score">Score: 0</span>
-    <span id="level">Level 1</span>
-  </div>
-  <div id="canvasWrap"><canvas id="gameCanvas"></canvas></div>
+ <div id="hud" style="display:none"><span id="score">Score: 0</span><span id="level">Level 1</span></div>
+ <div id="canvasWrap"><canvas id="gameCanvas"></canvas></div>
 </div>
 
-<!-- title -->
 <div id="titleScreen"><h1>Cookie Challenge</h1><button id="startBtn">Start Game</button></div>
 
-<!-- D-pad -->
 <div id="controls">
-  <div id="up"    class="btn"><span>▲</span></div>
-  <div id="down"  class="btn"><span>▼</span></div>
-  <div id="left"  class="btn"><span>◀</span></div>
-  <div id="right" class="btn"><span>▶</span></div>
+ <div id="up" class="btn"><span>▲</span></div><div id="down" class="btn"><span>▼</span></div>
+ <div id="left" class="btn"><span>◀</span></div><div id="right" class="btn"><span>▶</span></div>
 </div>
 
 <button id="muteBtn">🔊</button>
 <audio id="bgm" src="bgm.mp3" loop></audio>
 
 <script>
-/* ========== constants ========== */
-const PS=4, BASE_MS=2, CR=6, BASE_MR=12, PR=10, OREO_R=12, BULLET_R=4;
-const OREO_INTERVAL=15000, SHOOT_TIME=10000;
+/* ==== constants ==== */
+const PLAYER_SPEED=5, MONSTER_R=22, BULLET_R=5,
+      COOKIE_R=6, OREO_R=14, BOOST_R=10,
+      SHOOT_TIME=10e3, BOOST_TIME=10e3;
 
-/* ========== DOM shortcuts ========== */
-const cvs=q('#gameCanvas'),ctx=cvs.getContext('2d'),
-      hud=q('#hud'),scoreEl=q('#score'),levelEl=q('#level'),
-      title=q('#titleScreen'),start=q('#startBtn'),mute=q('#muteBtn'),
-      bgm=q('#bgm'),mobile=matchMedia('(pointer:coarse)').matches;
-function q(sel){return document.querySelector(sel);}
+/* ==== DOM ==== */
+const cvs=$('#gameCanvas'),ctx=cvs.getContext('2d'),hud=$('#hud'),
+      scoreEl=$('#score'),lvlEl=$('#level'),title=$('#titleScreen'),
+      start=$('#startBtn'),mute=$('#muteBtn'),bgm=$('#bgm'),
+      mobile=matchMedia('(pointer:coarse)').matches;
+function $(s){return document.querySelector(s);}
 
-/* ========== dynamic resize ========== */
-function size(){const w=innerWidth-24,h=(innerHeight-(mobile?220:60))-24;cvs.width=w;cvs.height=h;}
-addEventListener('resize',size);size();
+/* ==== resize ==== */
+function fit(){const w=innerWidth-24,h=(innerHeight-(mobile?220:60))-24;cvs.width=w;cvs.height=h;}
+addEventListener('resize',fit);fit();
 
-/* ========== D-pad state ========== */
+/* ==== D-pad ==== */
 const dirs={up:0,down:0,left:0,right:0};
 ['up','down','left','right'].forEach(id=>{
- ['touchstart','mousedown'].forEach(e=>g(id).addEventListener(e,a=>{a.preventDefault();dirs[id]=1}));
- ['touchend','touchcancel','mouseup','mouseleave'].forEach(e=>g(id).addEventListener(e,a=>{a.preventDefault();dirs[id]=0}));
+ ['touchstart','mousedown'].forEach(ev=>el(id).addEventListener(ev,e=>{e.preventDefault();dirs[id]=1}));
+ ['touchend','touchcancel','mouseup','mouseleave'].forEach(ev=>el(id).addEventListener(ev,e=>{e.preventDefault();dirs[id]=0}));
 });
-function g(id){return document.getElementById(id)}
+function el(id){return document.getElementById(id)}
 
-/* ========== Web-Audio SFX ========== */
+/* ==== audio helpers ==== */
 const AC=AudioContext||webkitAudioContext,ac=new AC();
-function tone(f,d=120,tp='square',v=.4){const o=ac.createOscillator(),g=ac.createGain();o.type=tp;o.frequency.value=f;g.gain.value=v;o.connect(g).connect(ac.destination);o.start();o.stop(ac.currentTime+d/1e3);}
-const eatSfx=()=>[932,1175,1397].forEach((f,i)=>setTimeout(()=>tone(f,90,'square',.35),i*30));
-const oreoSfx=()=>[523,659,784,1046].forEach((f,i)=>setTimeout(()=>tone(f,140,'triangle',.45),i*120));
-const hitSfx =()=>tone(110,340,'square',.5);
-const bulletSfx=()=>tone(1568,60,'square',.4);
+const osc=(f,d=120,t='square',v=.4)=>{const o=ac.createOscillator(),g=ac.createGain();o.type=t;o.frequency.value=f;g.gain.value=v;o.connect(g).connect(ac.destination);o.start();o.stop(ac.currentTime+d/1e3);}
+const eatSfx =()=>[932,1175,1397].forEach((f,i)=>setTimeout(()=>osc(f,90,'square',.35),i*30));
+const powerSfx=()=>[784,932,1046,1175].forEach((f,i)=>setTimeout(()=>osc(f,120,'triangle',.45),i*90));
+const boomSfx =()=>[330,196,98].forEach((f,i)=>setTimeout(()=>osc(f,180,'sawtooth',.5),i*70));
+const hitSfx =()=>osc(110,340,'square',.5);
+const fireSfx=()=>osc(1568,60,'square',.45);
 
-/* ========== helpers ========== */
-const rand=()=>({x:Math.random()*(cvs.width-40)+20,y:Math.random()*(cvs.height-40)+20});
-const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+/* ==== helpers ==== */
+const R=()=>({x:20+Math.random()*(cvs.width-40),y:20+Math.random()*(cvs.height-40)});
+const D=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 
-/* ========== game vars ========== */
-let p,cookies,mons,oreo,bullets,score,level,speedFactor,ms,gameOver,run,shooting,oreoTimer;
+/* ==== game vars ==== */
+let p,cookies,mons,playerBullets,monsterBullets,score,level,oreo,boost,
+    shootTimer,boostTimer,gameOver,run,monSpeed;
 
-/* ========== reset ========== */
+/* ==== reset ==== */
 function reset(){
- p={x:cvs.width/2,y:cvs.height/2,dx:0,dy:0,color:'#4ec5f1'};
- cookies=[];mons=[];bullets=[];oreo=null;score=0;level=1;speedFactor=1;ms=BASE_MS;gameOver=0;shooting=0;
- spawnCookies();spawnMonsters(3);
- scoreEl.textContent='Score: 0';levelEl.textContent='Level 1';
- clearInterval(oreoTimer);oreoTimer=setInterval(spawnOreo,OREO_INTERVAL);
+ p={x:cvs.width/2,y:cvs.height/2,dx:0,dy:0,spd:PLAYER_SPEED,color:'#4ec5f1'};
+ cookies=[];mons=[];playerBullets=[];monsterBullets=[];oreo=null;boost=null;
+ score=0;level=1;monSpeed=3;shootTimer=0;boostTimer=0;gameOver=0;
+ spawnCookies();spawnMonsters(5);
+ scoreEl.textContent='Score: 0';lvlEl.textContent='Level 1';
 }
 
-function spawnCookies(){for(let i=0;i<20;i++)cookies.push(rand());}
-
+function spawnCookies(){for(let i=0;i<25;i++)cookies.push(R());}
 function spawnMonsters(n){
- for(let i=0;i<n;i++){
-   let m=rand(),a=Math.random()*Math.PI*2;
-   m.dx=Math.cos(a)*ms;m.dy=Math.sin(a)*ms;
-   m.r=BASE_MR+(level-1)*5;
-   m.type=level;          // 1=red blob, 2=purple, 3+=green spike
-   mons.push(m);
+ for(let i=0;i<n;i++){let m=R(),a=Math.random()*6.28;
+  m.dx=Math.cos(a)*monSpeed;m.dy=Math.sin(a)*monSpeed;m.cool=1000+Math.random()*1000;
+  m.tCool=m.cool;mons.push(m);}
+}
+
+/* ==== main update ==== */
+function touchDir(){if(!mobile)return;
+ p.dx=(dirs.left?-p.spd:0)+(dirs.right?p.spd:0);
+ p.dy=(dirs.up?-p.spd:0)+(dirs.down?p.spd:0);
+}
+function firePlayer(){if(shootTimer<=0)return;fireSfx();
+ playerBullets.push({x:p.x,y:p.y,dx:0,dy:-10});}
+
+function fireMonster(m){
+ const ang=Math.atan2(p.y-m.y,p.x-m.x);monsterBullets.push({
+  x:m.x,y:m.y,dx:Math.cos(ang)*6,dy:Math.sin(ang)*6
+ });
+}
+
+function update(dt){
+ touchDir();
+ p.x=Math.max(PLAYER_SPEED,Math.min(cvs.width-PLAYER_SPEED,p.x+p.dx));
+ p.y=Math.max(PLAYER_SPEED,Math.min(cvs.height-PLAYER_SPEED,p.y+p.dy));
+
+ /* timers */
+ if(shootTimer>0){shootTimer-=dt;if(shootTimer<=0)p.color='#4ec5f1';}
+ if(boostTimer>0){boostTimer-=dt;if(boostTimer<=0){p.spd=PLAYER_SPEED;p.color='#4ec5f1';}}
+
+ /* bullets move */
+ playerBullets.forEach(b=>{b.y+=b.dy});
+ monsterBullets.forEach(b=>{b.x+=b.dx;b.y+=b.dy});
+ playerBullets=playerBullets.filter(b=>b.y>-BULLET_R);
+ monsterBullets=monsterBullets.filter(b=>b.x>-BULLET_R&&b.x<cvs.width+BULLET_R&&b.y>-BULLET_R&&b.y<cvs.height+BULLET_R);
+
+ /* monsters move & shoot */
+ mons.forEach(m=>{
+  m.x+=m.dx;m.y+=m.dy;
+  if(m.x<MONSTER_R||m.x>cvs.width-MONSTER_R)m.dx*=-1;
+  if(m.y<MONSTER_R||m.y>cvs.height-MONSTER_R)m.dy*=-1;
+  m.tCool-=dt;if(m.tCool<=0){fireMonster(m);m.tCool=m.cool;}
+ });
+
+ /* pickups */
+ cookies=cookies.filter(c=>{
+  if(D(c,p)<PLAYER_SPEED+COOKIE_R){score+=10;scoreEl.textContent='Score: '+score;eatSfx();return 0}
+  return 1;
+ });
+
+ if(!oreo && cookies.length<=20)oreo=R();
+ if(!boost && cookies.length<=10)boost=R();
+
+ if(oreo&&D(oreo,p)<PLAYER_SPEED+OREO_R){oreo=null;shootTimer=SHOOT_TIME;p.color='#ffd700';powerSfx();}
+ if(boost&&D(boost,p)<PLAYER_SPEED+BOOST_R){boost=null;boostTimer=BOOST_TIME;p.spd=PLAYER_SPEED*2.5;p.color='#00e0ff';powerSfx();}
+
+ /* bullet collisions */
+ mons=mons.filter(m=>{
+  const hit=playerBullets.some(b=>D(b,m)<MONSTER_R+BULLET_R);
+  if(hit){boomSfx();score+=50;scoreEl.textContent='Score: '+score;}
+  return !hit;
+ });
+ playerBullets=playerBullets.filter(b=>!mons.some(m=>D(b,m)<MONSTER_R+BULLET_R));
+
+ /* monster bullet hits player */
+ if(monsterBullets.some(b=>D(b,p)<PR+BULLET_R)){gameOver=1;run=0;hitSfx();bgm.pause();}
+
+ /* new level */
+ if(!cookies.length && !gameOver){
+  level++;lvlEl.textContent='Level '+level;
+  monSpeed+=0.3;spawnCookies();spawnMonsters(3+level*2);
+  shootTimer=0;boostTimer=0;oreo=null;boost=null;powerSfx();
  }
 }
 
-function spawnOreo(){oreo=rand();oreo.r=OREO_R;}
-
-function touchDir(){if(!mobile)return;p.dx=(dirs.left?-PS:0)+(dirs.right?PS:0);p.dy=(dirs.up?-PS:0)+(dirs.down?PS:0);}
-
-function update(){
- touchDir();
- /* player movement / bounds */
- p.x=Math.max(PR,Math.min(cvs.width-PR,p.x+p.dx));p.y=Math.max(PR,Math.min(cvs.height-PR,p.y+p.dy));
-
- /* bullets */
- bullets=bullets.filter(b=>{b.x+=b.dx;b.y+=b.dy;return b.x>-BULLET_R&&b.x<cvs.width+BULLET_R&&b.y>-BULLET_R&&b.y<cvs.height+BULLET_R;});
-
- /* monster move */
- mons.forEach(m=>{m.x+=m.dx;m.y+=m.dy;if(m.x<m.r||m.x>cvs.width-m.r)m.dx*=-1;if(m.y<m.r||m.y>cvs.height-m.r)m.dy*=-1});
-
- /* eat cookies */
- cookies=cookies.filter(c=>{if(dist(c,p)<PR+CR){score+=10;scoreEl.textContent='Score: '+score;eatSfx();return 0}return 1});
-
- /* pick up oreo */
- if(oreo && dist(oreo,p)<PR+OREO_R){oreo=null;shooting=SHOOT_TIME;oreoSfx();p.color='#ffd700';}
-
- /* shooting timer */
- if(shooting>0){shooting-=16;if(shooting<=0)p.color='#4ec5f1';}
-
- /* bullets hit monsters */
- bullets=bullets.filter(b=>{
-   let hit=false;
-   mons=mons.filter(m=>{
-     if(dist(b,m)<m.r+BULLET_R){score+=50;scoreEl.textContent='Score: '+score;hit=true;return 0}
-     return 1;
-   });
-   return !hit;
- });
-
- /* player hit */
- if(!shooting && mons.some(m=>dist(m,p)<m.r+PR)){gameOver=1;run=0;hitSfx();bgm.pause();}
-
- /* new level */
- if(!cookies.length){level++;speedFactor+=.2;ms=BASE_MS*speedFactor;levelEl.textContent='Level '+level;
-   spawnCookies();spawnMonsters(1);oreoSfx();} /* reuse fanfare */
+let last=0;
+function loop(t){
+ if(!run)return;const dt=t-last;last=t;update(dt);draw();requestAnimationFrame(loop);
 }
 
+/* ==== draw ==== */
+function circ(x,y,r,c){ctx.fillStyle=c;ctx.beginPath();ctx.arc(x,y,r,0,6.28);ctx.fill();}
 function draw(){
  ctx.fillStyle='#000';ctx.fillRect(0,0,cvs.width,cvs.height);
 
- /* cookies */
- cookies.forEach(c=>{ctx.fillStyle='#d69c4e';ctx.beginPath();ctx.arc(c.x,c.y,CR,0,6.28);ctx.fill();
- ctx.fillStyle='#925c27';ctx.beginPath();ctx.arc(c.x-2,c.y-1,2,0,6.28);ctx.fill();ctx.beginPath();ctx.arc(c.x+2,c.y+1,2,0,6.28);ctx.fill();});
+ cookies.forEach(c=>{circ(c.x,c.y,COOKIE_R,'#d69c4e');circ(c.x-2,c.y-1,2,'#925c27');circ(c.x+2,c.y+1,2,'#925c27');});
+ if(oreo){circ(oreo.x,oreo.y,OREO_R+3,'#fff');circ(oreo.x,oreo.y,OREO_R,'#3d2b1f');}
+ if(boost){circ(boost.x,boost.y,BOOST_R,'#00e0ff');}
 
- /* oreo */
- if(oreo){ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(oreo.x,oreo.y,OREO_R+2,0,6.28);ctx.fill();
-          ctx.fillStyle='#3d2b1f';ctx.beginPath();ctx.arc(oreo.x,oreo.y,OREO_R,0,6.28);ctx.fill();}
+ playerBullets.forEach(b=>circ(b.x,b.y,BULLET_R,'#d69c4e'));
+ monsterBullets.forEach(b=>circ(b.x,b.y,BULLET_R,'#3d2b1f'));
 
- /* bullets */
- ctx.fillStyle='#0bf';
- bullets.forEach(b=>{ctx.beginPath();ctx.arc(b.x,b.y,BULLET_R,0,6.28);ctx.fill();});
+ circ(p.x,p.y,PLAYER_SPEED,p.color);
 
- /* player */
- ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,PR,0,6.28);ctx.fill();
-
- /* monsters */
  mons.forEach(m=>{
-   ctx.fillStyle=m.type===1?'#e63946':m.type===2?'#8b5cf6':'#22c55e';
-   ctx.beginPath();ctx.arc(m.x,m.y,m.r,0,6.28);ctx.fill();
-   ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(m.x-m.r/3,m.y-m.r/3,Math.max(3,m.r/4),0,6.28);ctx.fill();
-   ctx.beginPath();ctx.arc(m.x+m.r/3,m.y-m.r/3,Math.max(3,m.r/4),0,6.28);ctx.fill();
-   ctx.fillStyle='#000';ctx.beginPath();ctx.arc(m.x-m.r/3,m.y-m.r/3,Math.max(1.5,m.r/6),0,6.28);ctx.fill();
-   ctx.beginPath();ctx.arc(m.x+m.r/3,m.y-m.r/3,Math.max(1.5,m.r/6),0,6.28);ctx.fill();
+  const color=level<2?'#e63946':level<3?'#8b5cf6':'#22c55e';
+  circ(m.x,m.y,MONSTER_R,color);
+  circ(m.x-MONSTER_R/3,m.y-MONSTER_R/3,MONSTER_R/3,'#fff');
+  circ(m.x+MONSTER_R/3,m.y-MONSTER_R/3,MONSTER_R/3,'#fff');
+  circ(m.x-MONSTER_R/3,m.y-MONSTER_R/3,MONSTER_R/6,'#000');
+  circ(m.x+MONSTER_R/3,m.y-MONSTER_R/3,MONSTER_R/6,'#000');
  });
 
  if(gameOver){
-   ctx.fillStyle='rgba(0,0,0,.75)';ctx.fillRect(0,0,cvs.width,cvs.height);
-   ctx.fillStyle='#fff';ctx.textAlign='center';ctx.font='8vw sans-serif';
-   ctx.fillText('Game Over',cvs.width/2,cvs.height/2-20);
-   ctx.font='4vw sans-serif';ctx.fillText('Press R or tap Start',cvs.width/2,cvs.height/2+20);
+  ctx.fillStyle='rgba(0,0,0,.75)';ctx.fillRect(0,0,cvs.width,cvs.height);
+  ctx.fillStyle='#fff';ctx.textAlign='center';ctx.font='8vw sans-serif';
+  ctx.fillText('Game Over',cvs.width/2,cvs.height/2-20);
+  ctx.font='4vw sans-serif';ctx.fillText('Press R or tap Start',cvs.width/2,cvs.height/2+20);
  }
 }
 
-function loop(){if(!run)return;update();draw();requestAnimationFrame(loop);}
-
-/* ========== controls ========== */
-start.onclick=()=>{title.style.display='none';hud.style.display='flex';reset();run=1;bgm.volume=.65;bgm.play();ac.resume();loop();};
-
+/* ==== controls ==== */
+start.onclick=()=>{title.style.display='none';hud.style.display='flex';reset();run=1;bgm.volume=.65;bgm.play();ac.resume();last=performance.now();loop(last);};
 addEventListener('keydown',e=>{
  if(!run&&e.key!=='r')start.click();
  if(gameOver&&e.key==='r'){start.click();return;}
- if(e.key===' '&&shooting>0){shoot();}       // space to fire
- if(e.key==='ArrowUp'||e.key==='w')p.dy=-PS;
- if(e.key==='ArrowDown'||e.key==='s')p.dy=PS;
- if(e.key==='ArrowLeft'||e.key==='a')p.dx=-PS;
- if(e.key==='ArrowRight'||e.key==='d')p.dx=PS;
+ if(e.key===' '){firePlayer();}
+ if(e.key==='ArrowUp'||e.key==='w')p.dy=-p.spd;
+ if(e.key==='ArrowDown'||e.key==='s')p.dy=p.spd;
+ if(e.key==='ArrowLeft'||e.key==='a')p.dx=-p.spd;
+ if(e.key==='ArrowRight'||e.key==='d')p.dx=p.spd;
 });
-
 addEventListener('keyup',e=>{
  if(['ArrowUp','w','ArrowDown','s'].includes(e.key))p.dy=0;
- if(['ArrowLeft','a','ArrowRight','d'].includes(e.key))p.dx=0;
+ if(['ArrowLeft','a','Right','d','ArrowRight'].includes(e.key))p.dx=0;
 });
-
-/* tap to shoot on mobile / mouse */
-cvs.addEventListener('mousedown',()=>shoot());
-cvs.addEventListener('touchstart',e=>{if(mobile)shoot();});
-
-function shoot(){if(shooting<=0)return;bulletSfx();
- bullets.push({x:p.x,y:p.y,dx:0,dy:-8});}
-
+cvs.addEventListener('mousedown',firePlayer);cvs.addEventListener('touchstart',e=>{if(mobile)firePlayer();});
 mute.onclick=()=>{bgm.muted=!bgm.muted;mute.textContent=bgm.muted?'🔇':'🔊';};
-</script>
-</body>
-</html>
+</script></body></html>
