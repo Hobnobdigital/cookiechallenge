@@ -47,6 +47,16 @@
 
 
         #muteBtn { position:fixed; top:10px; right:10px; z-index:10; font-size:18px; padding:6px 10px; border:none; border-radius:4px; background:#d69c4e; color:#111; cursor: pointer; }
+        
+        /* REVISED: D-Pad styles */
+        #controls { position:fixed; bottom:12px; left:50%; transform:translateX(-50%); z-index:9; width:210px; height:170px; }
+        .btn { position:absolute; width:68px; height:68px; border-radius:50%; background:rgba(255,255,255,.25); border:2px solid #fff; display:flex; justify-content:center; align-items:center; user-select:none; transition:.05s; }
+        .btn:active { background:#fff; color:#000; transform:scale(.94); }
+        #up { top:0; left:71px; } #down { bottom:0; left:71px; } #left { left:0; top:50%; transform:translateY(-50%); } #right { right:0; top:50%; transform:translateY(-50%); }
+        .btn span { font-size:30px; pointer-events:none; }
+        /* Hide D-pad on devices with a mouse/fine pointer */
+        @media(pointer:fine) { #controls { display:none; } }
+
     </style>
 </head>
 <body>
@@ -67,6 +77,14 @@
         <p>Grab the new power-up to automatically shoot cookies at the monsters. You'll need it!</p>
         <p class="hint">(Click or press any key to continue)</p>
     </div>
+    
+    <!-- REVISED: D-pad is back in the HTML -->
+    <div id="controls">
+        <div id="up"    class="btn"><span>▲</span></div>
+        <div id="down"  class="btn"><span>▼</span></div>
+        <div id="left"  class="btn"><span>◀</span></div>
+        <div id="right" class="btn"><span>▶</span></div>
+    </div>
 
     <button id="muteBtn">🔊</button>
     <audio id="bgm"></audio>
@@ -78,8 +96,8 @@ const BASE_MS = 1.5;
 const BASE_CR = 6, BASE_MR = 12, PR = 10;
 const BOOST_R = 12, PLAYER_BULLET_R = 4;
 const MONSTER_BULLET_R = 5;
-const STAR_TIME = 3000; // REVISED: Star lasts 3 seconds
-const BLASTER_TIME = 3000; // REVISED: Blaster lasts 3 seconds
+const STAR_TIME = 3000;
+const BLASTER_TIME = 3000;
 const MONSTER_SHOOT_LEVEL = 4;
 const MON_SHOOT_COOLDOWN = 8000;
 const AUTO_FIRE_RATE = 150;
@@ -100,14 +118,17 @@ const cvs = document.getElementById('gameCanvas'), ctx = cvs.getContext('2d'),
       levelMsg = document.getElementById('levelMessage'),
       startBtn = document.getElementById('startBtn'), mute = document.getElementById('muteBtn'),
       bgm = document.getElementById('bgm');
+const mobile = matchMedia('(pointer:coarse)').matches;
+
 
 function fit() {
-    const w = innerWidth - 24, h = (innerHeight - 60) - 24;
+    // REVISED: Make space for D-pad on mobile
+    const w = innerWidth - 24, h = (innerHeight - (mobile ? 220 : 60)) - 24;
     cvs.width = w; cvs.height = h;
 }
 addEventListener('resize', fit); fit();
 
-/* ===== Keyboard State ===== */
+/* ===== Keyboard & D-Pad State ===== */
 const dirs = { up: 0, down: 0, left: 0, right: 0 };
 
 /* ===== Web-Audio Helpers ===== */
@@ -252,7 +273,6 @@ function update(dt) {
 
     if (cookies.length <= nextPowerupTrigger) {
         let potentialSpawns = [];
-        // REVISED: Limit of 1 star per level
         if (starsSpawnedThisLevel < 1 && !star) { potentialSpawns.push('star'); }
         if (level >= MONSTER_SHOOT_LEVEL && !gunSpawnedThisLevel && !blaster) { potentialSpawns.push('blaster'); }
         
@@ -407,21 +427,40 @@ function resumeAfterMessage() {
 startBtn.addEventListener('click', startGame);
 levelMsg.addEventListener('click', resumeAfterMessage);
 
+// REVISED: Event listeners for keyboard AND mobile D-pad
+function handlePress(dir) { dirs[dir] = 1; }
+function handleRelease(dir) { dirs[dir] = 0; }
+
+// Keyboard
 addEventListener('keydown', e => {
     if (isPausedForMessage) { resumeAfterMessage(); return; }
     if (!run && e.key) { startGame(); return; }
     if (gameOver && e.key === 'r') { startGame(); return; }
-    if (e.key === 'ArrowUp' || e.key === 'w') dirs.up = 1;
-    if (e.key === 'ArrowDown' || e.key === 's') dirs.down = 1;
-    if (e.key === 'ArrowLeft' || e.key === 'a') dirs.left = 1;
-    if (e.key === 'ArrowRight' || e.key === 'd') dirs.right = 1;
+    if (e.key === 'ArrowUp' || e.key === 'w') handlePress('up');
+    if (e.key === 'ArrowDown' || e.key === 's') handlePress('down');
+    if (e.key === 'ArrowLeft' || e.key === 'a') handlePress('left');
+    if (e.key === 'ArrowRight' || e.key === 'd') handlePress('right');
 });
 addEventListener('keyup', e => {
-    if (e.key === 'ArrowUp' || e.key === 'w') dirs.up = 0;
-    if (e.key === 'ArrowDown' || e.key === 's') dirs.down = 0;
-    if (e.key === 'ArrowLeft' || e.key === 'a') dirs.left = 0;
-    if (e.key === 'ArrowRight' || e.key === 'd') dirs.right = 0;
+    if (e.key === 'ArrowUp' || e.key === 'w') handleRelease('up');
+    if (e.key === 'ArrowDown' || e.key === 's') handleRelease('down');
+    if (e.key === 'ArrowLeft' || e.key === 'a') handleRelease('left');
+    if (e.key === 'ArrowRight' || e.key === 'd') handleRelease('right');
 });
+
+// Touch D-Pad for mobile
+if (mobile) {
+    document.getElementById('up').addEventListener('touchstart', (e) => { e.preventDefault(); handlePress('up'); });
+    document.getElementById('down').addEventListener('touchstart', (e) => { e.preventDefault(); handlePress('down'); });
+    document.getElementById('left').addEventListener('touchstart', (e) => { e.preventDefault(); handlePress('left'); });
+    document.getElementById('right').addEventListener('touchstart', (e) => { e.preventDefault(); handlePress('right'); });
+
+    document.getElementById('up').addEventListener('touchend', (e) => { e.preventDefault(); handleRelease('up'); });
+    document.getElementById('down').addEventListener('touchend', (e) => { e.preventDefault(); handleRelease('down'); });
+    document.getElementById('left').addEventListener('touchend', (e) => { e.preventDefault(); handleRelease('left'); });
+    document.getElementById('right').addEventListener('touchend', (e) => { e.preventDefault(); handleRelease('right'); });
+}
+
 
 cvs.addEventListener('click', () => {
     if (gameOver) { startGame(); }
