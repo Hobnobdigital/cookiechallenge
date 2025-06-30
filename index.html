@@ -48,13 +48,11 @@
 
         #muteBtn { position:fixed; top:10px; right:10px; z-index:10; font-size:18px; padding:6px 10px; border:none; border-radius:4px; background:#d69c4e; color:#111; cursor: pointer; }
         
-        /* REVISED: D-Pad styles */
         #controls { position:fixed; bottom:12px; left:50%; transform:translateX(-50%); z-index:9; width:210px; height:170px; }
         .btn { position:absolute; width:68px; height:68px; border-radius:50%; background:rgba(255,255,255,.25); border:2px solid #fff; display:flex; justify-content:center; align-items:center; user-select:none; transition:.05s; }
         .btn:active { background:#fff; color:#000; transform:scale(.94); }
         #up { top:0; left:71px; } #down { bottom:0; left:71px; } #left { left:0; top:50%; transform:translateY(-50%); } #right { right:0; top:50%; transform:translateY(-50%); }
         .btn span { font-size:30px; pointer-events:none; }
-        /* Hide D-pad on devices with a mouse/fine pointer */
         @media(pointer:fine) { #controls { display:none; } }
 
     </style>
@@ -78,7 +76,6 @@
         <p class="hint">(Click or press any key to continue)</p>
     </div>
     
-    <!-- REVISED: D-pad is back in the HTML -->
     <div id="controls">
         <div id="up"    class="btn"><span>▲</span></div>
         <div id="down"  class="btn"><span>▼</span></div>
@@ -93,7 +90,8 @@
 /* ===== Configurable constants ===== */
 const PS = 2.5, PS_BOOST = 5;
 const BASE_MS = 1.5;
-const BASE_CR = 6, BASE_MR = 12, PR = 10;
+const BASE_CR = 6, BASE_MR = 14;
+const PR = 10;
 const BOOST_R = 12, PLAYER_BULLET_R = 4;
 const MONSTER_BULLET_R = 5;
 const STAR_TIME = 3000;
@@ -122,7 +120,6 @@ const mobile = matchMedia('(pointer:coarse)').matches;
 
 
 function fit() {
-    // REVISED: Make space for D-pad on mobile
     const w = innerWidth - 24, h = (innerHeight - (mobile ? 220 : 60)) - 24;
     cvs.width = w; cvs.height = h;
 }
@@ -133,13 +130,37 @@ const dirs = { up: 0, down: 0, left: 0, right: 0 };
 
 /* ===== Web-Audio Helpers ===== */
 const AC = window.AudioContext || window.webkitAudioContext, ac = new AC();
-const beep = (f, d=120, t='square', v=.4) => { const o = ac.createOscillator(), g = ac.createGain(); o.type = t; o.frequency.value = f; g.gain.value = v; o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime + d / 1e3); };
-const eatSfx = () => [932, 1175, 1397].forEach((f, i) => setTimeout(() => beep(f, 90, 'square', .35), i * 25));
+const beep = (f, d=120, t='square', v=.4, delay=0) => {
+    if(!ac) return;
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = t;
+    o.frequency.value = f;
+    g.gain.value = v;
+    o.connect(g).connect(ac.destination);
+    o.start(ac.currentTime + delay);
+    o.stop(ac.currentTime + delay + d / 1e3);
+};
+// REVISED: New gratifying "cha-ching" sound for eating a cookie
+const eatSfx = () => {
+    beep(1046, 50, 'sine', 0.2);
+    beep(1397, 100, 'sine', 0.3, 0.05);
+};
 const levelSfx = () => [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => beep(f, 140, 'triangle', .4), i * 140));
 const hitSfx = () => beep(110, 340, 'square', .5);
 const fireSfx = () => beep(1568, 60, 'square', .2);
 const powerSfx = () => [659, 784, 1046].forEach((f, i) => setTimeout(() => beep(f, 100, 'sine', .4), i * 50));
-const stompSfx = () => [220, 147, 98, 73].forEach((f, i) => setTimeout(() => beep(f, 200, 'sawtooth', .5), i * 40));
+// REVISED: New rewarding "explosion" sound for blaster kills
+const stompSfx = () => {
+    beep(330, 150, 'sawtooth', 0.4);
+    beep(165, 150, 'sawtooth', 0.4, 0.02);
+};
+// REVISED: New rewarding "power-up" sound for star kills
+const starStompSfx = () => {
+    beep(523, 80, 'sine', 0.2);
+    beep(784, 80, 'sine', 0.3, 0.08);
+    beep(1046, 100, 'sine', 0.4, 0.16);
+};
+
 
 /* ===== Game State ===== */
 let p, cookies, mons, playerBullets, monsterBullets, particles, score, level, starTimer, blasterTimer,
@@ -197,7 +218,7 @@ function spawnMonsters(n) {
         let m = R(); let a = Math.random() * 6.28;
         m.dx = Math.cos(a) * monSpeed;
         m.dy = Math.sin(a) * monSpeed;
-        m.r = BASE_MR + (level * 2);
+        m.r = BASE_MR;
         m.cool = MON_SHOOT_COOLDOWN * (0.8 + Math.random() * 0.4); m.tCool = m.cool;
         mons.push(m);
     }
@@ -271,7 +292,7 @@ function update(dt) {
     if (star) { star.life -= dt; if (star.life <= 0) star = null; }
     if (blaster) { blaster.life -= dt; if (blaster.life <= 0) blaster = null; }
 
-    if (cookies.length <= nextPowerupTrigger) {
+    if (cookies.length <= nextPowerupTrigger && nextPowerupTrigger > 0) {
         let potentialSpawns = [];
         if (starsSpawnedThisLevel < 1 && !star) { potentialSpawns.push('star'); }
         if (level >= MONSTER_SHOOT_LEVEL && !gunSpawnedThisLevel && !blaster) { potentialSpawns.push('blaster'); }
@@ -322,7 +343,8 @@ function update(dt) {
     if (starTimer > 0) {
         mons = mons.filter(m => {
             if (D(m, p) < m.r + p.animatedR) {
-                stompSfx(); createDisintegration(m); score += 30; ui.textContent = 'Score: ' + score; return false;
+                starStompSfx();
+                createDisintegration(m); score += 30; ui.textContent = 'Score: ' + score; return false;
             } return true;
         });
     } else if (mons.some(m => D(m, p) < m.r + PR)) { gameOver = 1; run = false; hitSfx(); bgm.pause(); }
@@ -427,7 +449,6 @@ function resumeAfterMessage() {
 startBtn.addEventListener('click', startGame);
 levelMsg.addEventListener('click', resumeAfterMessage);
 
-// REVISED: Event listeners for keyboard AND mobile D-pad
 function handlePress(dir) { dirs[dir] = 1; }
 function handleRelease(dir) { dirs[dir] = 0; }
 
