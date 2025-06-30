@@ -22,7 +22,6 @@
             z-index: 20;
         }
         #titleScreen {
-            /* REVISED: Changed to 'contain' to ensure full image is visible */
             background: #000 url('title.png') center/contain no-repeat;
         }
         #titleContent { position:relative; z-index:1; background: rgba(0,0,0,0.3); padding: 2rem; border-radius: 15px; }
@@ -86,7 +85,6 @@
 
     <button id="muteBtn">🔊</button>
     <audio id="bgm"></audio>
-    <!-- NEW: Dedicated audio for star power-up -->
     <audio id="starMusic"></audio>
 
 <script>
@@ -101,14 +99,15 @@ const MONSTER_BULLET_R = 5;
 const STAR_TIME = 3000;
 const BLASTER_TIME = 3000;
 const MONSTER_SHOOT_LEVEL = 4;
+const MONSTER_SPAWN_BUFFER = 150;
 const MON_SHOOT_COOLDOWN = 8000;
 const AUTO_FIRE_RATE = 150;
 const POWERUP_LIFETIME = 10000;
 
 /* ===== MP3 playlist ===== */
 let playlist = [
-    // FIXED: Corrected filename for Rema song
-    "Baby (Is it a Crime)' - Rema (Lyric video).mp3",
+    // FIXED: Corrected filename for Rema song by removing extra quotes
+    "Baby (Is it a Crime) - Rema (Lyric video).mp3",
     "Backstreet Boys - Everybody (Backstreet's Back) (Lyrics).mp3",
     "Billie Eilish - BIRDS OF A FEATHER (Official Lyric Video).mp3",
     "Dave & Central Cee - Sprinter (Clean).mp3",
@@ -126,9 +125,8 @@ const cvs = document.getElementById('gameCanvas'), ctx = cvs.getContext('2d'),
       levelMsg = document.getElementById('levelMessage'),
       startBtn = document.getElementById('startBtn'), mute = document.getElementById('muteBtn'),
       bgm = document.getElementById('bgm'),
-      starMusic = document.getElementById('starMusic'); // NEW
+      starMusic = document.getElementById('starMusic');
 
-// FIXED: Re-added the missing 'mobile' constant definition
 const mobile = matchMedia('(pointer:coarse)').matches;
 
 function fit() {
@@ -161,7 +159,6 @@ const blasterHitSfx = () => {
     beep(440, 50, 'triangle', 0.3);
     beep(220, 100, 'sawtooth', 0.4, 0.05);
 };
-// REVISED: Star stomp now uses the same satisfying sound as the blaster
 const starStompSfx = blasterHitSfx;
 
 
@@ -188,11 +185,10 @@ function nextSong() {
     const song = shuffledSongs.pop();
     if (song) {
         bgm.src = encodeURI(song);
-        bgm.play().catch(err => console.log("Audio play failed:", err));
+        bgm.play().catch(err => {});
     }
 }
 bgm.onended = nextSong;
-// NEW: Loop star music
 starMusic.loop = true;
 try {
     starMusic.src = "Mario Kart 8 Deluxe - Star Sound.mp3";
@@ -222,8 +218,14 @@ function reset() {
 /* ===== Spawners & Leveling ===== */
 function spawnCookies() { for (let i = 0; i < 20; i++) cookies.push(R()); }
 function spawnMonsters(n) {
+    const center = { x: cvs.width / 2, y: cvs.height / 2 };
     for (let i = 0; i < n; i++) {
-        let m = R(); let a = Math.random() * 6.28;
+        let m;
+        do {
+            m = R();
+        } while (D(m, center) < MONSTER_SPAWN_BUFFER);
+        
+        let a = Math.random() * 6.28;
         m.dx = Math.cos(a) * monSpeed;
         m.dy = Math.sin(a) * monSpeed;
         m.r = (level < MONSTER_SHOOT_LEVEL) ? BASE_MR : BIG_MONSTER_R;
@@ -289,8 +291,8 @@ function update(dt) {
         if (starTimer <= 0) {
             p.color = '#4ec5f1';
             p.animatedR = PR;
-            starMusic.pause(); // NEW
-            if(!mute.classList.contains('muted')) bgm.play(); // NEW
+            starMusic.pause();
+            if(!mute.classList.contains('muted')) bgm.play();
         }
     }
 
@@ -342,9 +344,9 @@ function update(dt) {
 
     if (star && D(star, p) < p.animatedR + BOOST_R) {
         star = null; starTimer = STAR_TIME; p.color = '#ffd700'; powerSfx();
-        bgm.pause(); // NEW
-        starMusic.currentTime = 0; // NEW
-        starMusic.play(); // NEW
+        bgm.pause();
+        starMusic.currentTime = 0;
+        starMusic.play();
     }
     if (blaster && D(blaster, p) < p.animatedR + BOOST_R) { blaster = null; blasterTimer = BLASTER_TIME; p.color = '#00e0ff'; powerSfx(); }
 
@@ -441,6 +443,7 @@ function loop(t) {
 function startGame() {
     if(run) return;
     
+    // Resume AudioContext on the first user interaction
     ac.resume();
     
     run = true;
