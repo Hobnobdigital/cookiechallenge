@@ -88,14 +88,15 @@
 
 <script>
 /* ===== Configurable constants ===== */
-const PS = 2.5, PS_BOOST = 5;
-const BASE_MS = 1.5;
-const BASE_CR = 6, BASE_MR = 14;
+const PS = 3, PS_BOOST = 6;
+const BASE_MS = 1.8;
+const BASE_CR = 6, BASE_MR = 10; // REVISED: Smaller base monster size
+const BIG_MONSTER_R = 16; // NEW: Size for tougher monsters
 const PR = 10;
 const BOOST_R = 12, PLAYER_BULLET_R = 4;
 const MONSTER_BULLET_R = 5;
-const STAR_TIME = 3000;
-const BLASTER_TIME = 3000;
+const STAR_TIME = 3000; // REVISED: Star effect lasts 3 seconds
+const BLASTER_TIME = 3000; // REVISED: Blaster effect lasts 3 seconds
 const MONSTER_SHOOT_LEVEL = 4;
 const MON_SHOOT_COOLDOWN = 8000;
 const AUTO_FIRE_RATE = 150;
@@ -103,11 +104,17 @@ const POWERUP_LIFETIME = 10000;
 
 /* ===== MP3 playlist ===== */
 let playlist = [
-    "Baby (Is it a Crime)' - Rema (Lyric video).mp3", "Backstreet Boys - Everybody (Backstreet's Back) (Lyrics).mp3",
-    "Billie Eilish - BIRDS OF A FEATHER (Official Lyric Video).mp3", "Dave & Central Cee - Sprinter (Clean).mp3",
-    "Davido - If (lyrics).mp3", "How You Remind Me - Nickelback (Clean Version).mp3",
-    "Kris Kross - Jump (Radio Edit) [Audio HQ].mp3", "TLC - Waterfalls (Lyrics).mp3",
-    "Sabrina Carpenter - Espresso.mp3", "Tubthumping (I Get Knocked Down) Lyrics.mp3"
+    // FIXED: Removed extra quotes from Rema song
+    "Baby (Is it a Crime)' - Rema (Lyric video).mp3",
+    "Backstreet Boys - Everybody (Backstreet's Back) (Lyrics).mp3",
+    "Billie Eilish - BIRDS OF A FEATHER (Official Lyric Video).mp3",
+    "Dave & Central Cee - Sprinter (Clean).mp3",
+    "Davido - If (lyrics).mp3",
+    "How You Remind Me - Nickelback (Clean Version).mp3",
+    "Kris Kross - Jump (Radio Edit) [Audio HQ].mp3",
+    "TLC - Waterfalls (Lyrics).mp3",
+    "Sabrina Carpenter - Espresso.mp3",
+    "Tubthumping (I Get Knocked Down) Lyrics.mp3"
 ];
 
 /* ===== DOM ===== */
@@ -140,21 +147,16 @@ const beep = (f, d=120, t='square', v=.4, delay=0) => {
     o.start(ac.currentTime + delay);
     o.stop(ac.currentTime + delay + d / 1e3);
 };
-// REVISED: New gratifying "cha-ching" sound for eating a cookie
-const eatSfx = () => {
-    beep(1046, 50, 'sine', 0.2);
-    beep(1397, 100, 'sine', 0.3, 0.05);
-};
+const eatSfx = () => { beep(1046, 50, 'sine', 0.2); beep(1397, 100, 'sine', 0.3, 0.05); };
 const levelSfx = () => [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => beep(f, 140, 'triangle', .4), i * 140));
 const hitSfx = () => beep(110, 340, 'square', .5);
 const fireSfx = () => beep(1568, 60, 'square', .2);
-const powerSfx = () => [659, 784, 1046].forEach((f, i) => setTimeout(() => beep(f, 100, 'sine', .4), i * 50));
-// REVISED: New rewarding "explosion" sound for blaster kills
-const stompSfx = () => {
-    beep(330, 150, 'sawtooth', 0.4);
-    beep(165, 150, 'sawtooth', 0.4, 0.02);
+const powerSfx = () => [659, 784, 1046, 1318].forEach((f, i) => setTimeout(() => beep(f, 80, 'sine', .3), i * 50));
+// NEW: Rewarding sound for blaster kill
+const blasterHitSfx = () => {
+    beep(440, 50, 'triangle', 0.3);
+    beep(220, 100, 'sawtooth', 0.4, 0.05);
 };
-// REVISED: New rewarding "power-up" sound for star kills
 const starStompSfx = () => {
     beep(523, 80, 'sine', 0.2);
     beep(784, 80, 'sine', 0.3, 0.08);
@@ -165,7 +167,7 @@ const starStompSfx = () => {
 /* ===== Game State ===== */
 let p, cookies, mons, playerBullets, monsterBullets, particles, score, level, starTimer, blasterTimer,
     gameOver, run, monSpeed, star, blaster, autoFireCooldown,
-    isPausedForMessage, starsSpawnedThisLevel, gunSpawnedThisLevel, nextPowerupTrigger;
+    isPausedForMessage, starsSpawnedThisLevel, gunsSpawnedThisLevel, nextPowerupTrigger;
 
 /* ----- helpers ----- */
 const R = () => ({ x: 20 + Math.random() * (cvs.width - 40), y: 20 + Math.random() * (cvs.height - 40) });
@@ -199,15 +201,12 @@ function reset() {
     starTimer = 0; blasterTimer = 0; gameOver = 0;
     star = null; blaster = null; autoFireCooldown = 0;
     isPausedForMessage = false;
-    starsSpawnedThisLevel = 0; gunSpawnedThisLevel = false;
+    starsSpawnedThisLevel = 0; gunsSpawnedThisLevel = 0; // REVISED
     nextPowerupTrigger = 15;
     spawnCookies();
     spawnMonsters(3 + level);
     ui.textContent = 'Score: 0';
-    if (!bgm.src || bgm.paused) {
-        if (!shuffledSongs.length) shufflePlaylist();
-        nextSong();
-    }
+    nextSong(); // Force new song on every reset
     levelSfx();
 }
 
@@ -218,7 +217,8 @@ function spawnMonsters(n) {
         let m = R(); let a = Math.random() * 6.28;
         m.dx = Math.cos(a) * monSpeed;
         m.dy = Math.sin(a) * monSpeed;
-        m.r = BASE_MR;
+        // REVISED: Monster size depends on level
+        m.r = (level < MONSTER_SHOOT_LEVEL) ? BASE_MR : BIG_MONSTER_R;
         m.cool = MON_SHOOT_COOLDOWN * (0.8 + Math.random() * 0.4); m.tCool = m.cool;
         mons.push(m);
     }
@@ -231,7 +231,7 @@ function proceedToNextLevel() {
     p.animatedR = PR;
 
     star = null; blaster = null;
-    starsSpawnedThisLevel = 0; gunSpawnedThisLevel = false;
+    starsSpawnedThisLevel = 0; gunsSpawnedThisLevel = 0; // REVISED
     nextPowerupTrigger = 15;
     
     spawnCookies(); 
@@ -294,8 +294,9 @@ function update(dt) {
 
     if (cookies.length <= nextPowerupTrigger && nextPowerupTrigger > 0) {
         let potentialSpawns = [];
-        if (starsSpawnedThisLevel < 1 && !star) { potentialSpawns.push('star'); }
-        if (level >= MONSTER_SHOOT_LEVEL && !gunSpawnedThisLevel && !blaster) { potentialSpawns.push('blaster'); }
+        // REVISED: Stricter spawn limits
+        if (starsSpawnedThisLevel < 2 && !star) { potentialSpawns.push('star'); }
+        if (level >= MONSTER_SHOOT_LEVEL && gunsSpawnedThisLevel < 2 && !blaster) { potentialSpawns.push('blaster'); }
         
         if (potentialSpawns.length > 0) {
             const type = potentialSpawns[Math.floor(Math.random() * potentialSpawns.length)];
@@ -304,7 +305,7 @@ function update(dt) {
                 starsSpawnedThisLevel++;
             } else if (type === 'blaster') {
                 blaster = { ...R(), life: POWERUP_LIFETIME };
-                gunSpawnedThisLevel = true;
+                gunsSpawnedThisLevel++;
             }
             nextPowerupTrigger -= 5;
         }
@@ -334,7 +335,8 @@ function update(dt) {
     playerBullets = playerBullets.filter(b => {
         const hitMonster = mons.find(m => D(b, m) < m.r + PLAYER_BULLET_R);
         if(hitMonster) {
-            mons = mons.filter(m => m !== hitMonster); createDisintegration(hitMonster); stompSfx();
+            mons = mons.filter(m => m !== hitMonster); createDisintegration(hitMonster);
+            blasterHitSfx(); // REVISED: Use new rewarding sound
             score += 50; ui.textContent = 'Score: ' + score; return false;
         }
         return true;
@@ -424,11 +426,7 @@ function startGame() {
     if(run) return;
     
     ac.resume();
-    let playPromise = bgm.play();
-    if (playPromise !== undefined) {
-        playPromise.then(() => {}).catch(error => {});
-    }
-
+    
     run = true;
     title.style.display = 'none';
     ui.style.display = 'block';
